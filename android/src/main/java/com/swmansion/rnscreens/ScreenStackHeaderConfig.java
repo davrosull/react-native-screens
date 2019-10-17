@@ -23,35 +23,6 @@ public class ScreenStackHeaderConfig extends ViewGroup {
 
   private static final float TOOLBAR_ELEVATION = PixelUtil.toPixelFromDIP(4);
 
-  private static final class ToolbarWithLayoutLoop extends Toolbar {
-
-    private final Runnable mLayoutRunnable = new Runnable() {
-      @Override
-      public void run() {
-        mLayoutEnqueued = false;
-        measure(
-                MeasureSpec.makeMeasureSpec(getWidth(), MeasureSpec.EXACTLY),
-                MeasureSpec.makeMeasureSpec(getHeight(), MeasureSpec.EXACTLY));
-        layout(getLeft(), getTop(), getRight(), getBottom());
-      }
-    };
-    private boolean mLayoutEnqueued = false;
-
-    public ToolbarWithLayoutLoop(Context context) {
-      super(context);
-    }
-
-    @Override
-    public void requestLayout() {
-      super.requestLayout();
-
-      if (!mLayoutEnqueued) {
-        mLayoutEnqueued = true;
-        post(mLayoutRunnable);
-      }
-    }
-  }
-
   private final ScreenStackHeaderSubview mConfigSubviews[] = new ScreenStackHeaderSubview[3];
   private int mSubviewsCount = 0;
   private String mTitle;
@@ -63,20 +34,18 @@ public class ScreenStackHeaderConfig extends ViewGroup {
   private boolean mIsBackButtonHidden;
   private boolean mIsShadowHidden;
   private int mTintColor;
-  private int mWidth;
-  private int mHeight;
   private final Toolbar mToolbar;
 
   private OnBackPressedCallback mBackCallback = new OnBackPressedCallback(false) {
     @Override
     public void handleOnBackPressed() {
-      getScreenStack().dismiss(getScreen());
+      getScreenStack().dismiss(getScreenFragment());
     }
   };
   private OnClickListener mBackClickListener = new OnClickListener() {
     @Override
     public void onClick(View view) {
-      getScreenStack().dismiss(getScreen());
+      getScreenStack().dismiss(getScreenFragment());
     }
   };
 
@@ -84,36 +53,18 @@ public class ScreenStackHeaderConfig extends ViewGroup {
     super(context);
     setVisibility(View.GONE);
 
-    mToolbar = new ToolbarWithLayoutLoop(context);
+    mToolbar = new Toolbar(context);
 
     // set primary color as background by default
     TypedValue tv = new TypedValue();
     if (context.getTheme().resolveAttribute(android.R.attr.colorPrimary, tv, true)) {
       mToolbar.setBackgroundColor(tv.data);
     }
-
-    mWidth = 0;
-    mHeight = 0;
-
-    if (context.getTheme().resolveAttribute(android.R.attr.actionBarSize, tv, true)) {
-      mHeight = TypedValue.complexToDimensionPixelSize(tv.data, getResources().getDisplayMetrics());
-    }
-
-  }
-
-  private void updateToolbarLayout() {
-    mToolbar.measure(
-            View.MeasureSpec.makeMeasureSpec(mWidth, View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(mHeight, View.MeasureSpec.EXACTLY));
-    mToolbar.layout(0, 0, mWidth, mHeight);
   }
 
   @Override
   protected void onLayout(boolean changed, int l, int t, int r, int b) {
-    if (mWidth != (r - l)) {
-      mWidth = (r - l);
-      updateToolbarLayout();
-    }
+    // no-op
   }
 
   @Override
@@ -141,10 +92,13 @@ public class ScreenStackHeaderConfig extends ViewGroup {
     return null;
   }
 
-  private Fragment getScreenFragment() {
+  private ScreenStackFragment getScreenFragment() {
     ViewParent screen = getParent();
     if (screen instanceof Screen) {
-      return ((Screen) screen).getFragment();
+      Fragment fragment = ((Screen) screen).getFragment();
+      if (fragment instanceof ScreenStackFragment) {
+        return (ScreenStackFragment) fragment;
+      }
     }
     return null;
   }
@@ -159,16 +113,16 @@ public class ScreenStackHeaderConfig extends ViewGroup {
     Screen parent = (Screen) getParent();
     if (mIsHidden) {
       if (mToolbar.getParent() != null) {
-        parent.removeView(mToolbar);
+        getScreenFragment().removeToolbar();
       }
       return;
     }
 
     if (mToolbar.getParent() == null) {
-      parent.addView(mToolbar);
+      getScreenFragment().setToolbar(mToolbar);
     }
 
-    AppCompatActivity activity = (AppCompatActivity) parent.getFragment().getActivity();
+    AppCompatActivity activity = (AppCompatActivity) getScreenFragment().getActivity();
     activity.setSupportActionBar(mToolbar);
     ActionBar actionBar = activity.getSupportActionBar();
 
